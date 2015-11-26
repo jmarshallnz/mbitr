@@ -1,0 +1,66 @@
+---
+title: "Mbit genetic model"
+author: "Jonathan Marshall"
+date: "26 November 2015"
+output: html_document
+---
+
+The mBit typing system for *Campylobacter* uses presence/absence of 18 genes to give an 18 bit typing system.
+
+To do source attribution, we need to be able to estimate the probability of observing a particular type (i.e. 18 bit sequence) $x$ for each source $j$. i.e. we need
+
+$$
+P(x = (x_1, x_2, \ldots, x_{18}) \mid j)
+$$
+
+The sample space for $x$ is of size $2^18 = `r 2^18`$ so it is not feasible to estimate each of these probabilities directly from the data without making some assumptions about the underlying sampling model.
+
+The simplest assumption is that the genes arise independently: i.e. we assume that the probability of observing gene $i$ is independent of the presence or absence of any of the other genes $k \neq i$.  This allows the joint probability to be simply the product of the probability of each gene being present or absent,
+
+$$
+P(x = (x_1, x_2, \ldots, x_{18}) \mid j) = \prod_{i=1}^{18} P(x_i = 1 \bar j)
+$$
+
+We now need only estimate each of these 18 individual probabilities, something that is achievable with significantly less data. A natural model is to assume that the $x_i$'s are Bernoulli, thus $P(x_i = 1 \bar j) = p_{ij}$, where $p_{ij}$ is the true probability of observing gene $i$ in an isolate from source $j$.
+
+The likelihood of observing a set of $K_j$ independent isolates $X$ on source $j$ is then
+
+$$
+\begin{aligned}
+L(\mathbf{X} \mid j, \mathbf{p}) &= \prod_{k=1}^{K_j} P(\mathbf{X}_k \mid j)\\
+& = \prod_{k=1}^{K_j} \prod_{i=1}^{18} p_{ij}^{x_{ki}}(1 - p_{ij})^{1-x_{ki}}\\
+& = \prod_{i=1}^{18} \prod_{k=1}^{K_j} p_{ij}^{x_{ki}}(1 - p_{ij})^{1-x_{ki}}\\
+& = \prod_{i=1}^{18} p_{ij}^{\sum_{k=1}^{K_j} x_{ki}}(1 - p_{ij})^{K_j-\sum_{k=1}^{K_j} x_{ki}}\\
+& = \prod_{i=1}^{18} p_{ij}^{n_{ij}}(1 - p_{ij})^{K_j-n_{ij}}
+\end{aligned}
+$$
+
+where $x_{ki}$ is 1 for presence, 0 for absence of gene $i$ in observation $X_k$ and $n_{ij}$ is the number of observations on source $j$ that have gene $i$ present.
+
+If we assume that we have some prior knowledge of the prevalences (perhaps some genes might be similar across sources?) we might
+have Beta distributions on the $p_{ij}'s$. It may be that prior knowledge is weak, so a uniform (or $\mathsf{Beta}(1,1)$) distribution might be used. A prior of the form
+
+$$
+p_{ij} \sim \mathsf{Beta}(\alpha_{ij}, \beta_{ij})
+$$
+
+would result in a posterior proportional to
+
+$$
+\begin{aligned}
+P(p_{ij} \mid X, \alpha, \beta) &\approx \prod_{i=1}^{18} p_{ij}^{n_{ij}}(1 - p_{ij})^{K_j-n_{ij}} p_{ij}^{\alpha_{ij}-1}(1-p_{ij})^{\beta_{ij} - 1}\\
+&\approx \prod_{i=1}^{18} p_{ij}^{n_{ij} + \alpha_{ij} - 1}(1 - p_{ij})^{K_j-n_{ij} + \beta_{ij} - 1}
+\end{aligned}
+$$
+
+and thus the posterior is $p_{ij} \sim \mathsf{Beta}(n_{ij} + \alpha_{ij}, K_j - n_{ij} + \beta_{ij})$. The prior here can be interpreted as adding $\alpha$ additional observations with all genes present, and $\beta$ observations with all genes absent.
+
+To sample from the posterior, we need only draw samples from this beta distribution.
+
+For the source attribution, we can then run the `islandR` algorithm to determine the proportion of human isolates attributable to each source.
+
+We can also test the attribution via self-attribution. i.e. for each isolate $\mathbf{X}_{k}$ from each source, we can remove it, estimate the $p_{ij}$'s and then see to which source that isolate is most likely attributed. If we repeat for all isolates we can get a measure of how well the model can discriminate between sources. Note that this is not necessarily the same as whether or not the model can accurately estimate the proportions attributed to each source (i.e. the `islandR` attribution) but nonetheless can give some indication of the models predictive performance.
+
+## JM rambling below here...
+
+I *think* there might be some nice maths in this. After all, the posterior mean of the $p_{ij}$'s is easy if that is what we want to use for working out the mean (the mode of the beta is probably also easy), then we just have a product of those. I guess the product of the modes would be the mode of the product (the product of the means wouldn't be the mean though).
